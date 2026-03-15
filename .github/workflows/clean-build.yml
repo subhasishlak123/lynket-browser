@@ -10,11 +10,11 @@ jobs:
 
       - name: Remove Trackers (Surgical Strip)
         run: |
-          # Kill Google/Firebase/Ads in all build files
-          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/com.google.gms:google-services/d' || true
-          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/com.google.firebase/d' || true
-          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/play-services-ads/d' || true
-          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/play-services-analytics/d' || true
+          # Clean all gradle files in the whole repo
+          find . -name "*.gradle*" -type f | xargs sed -i '/com.google.gms:google-services/d' || true
+          find . -name "*.gradle*" -type f | xargs sed -i '/com.google.firebase/d' || true
+          find . -name "*.gradle*" -type f | xargs sed -i '/play-services-ads/d' || true
+          find . -name "*.gradle*" -type f | xargs sed -i '/play-services-analytics/d' || true
           
           # Remove tracker metadata from Manifests
           find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.android.gms.measurement/d' || true
@@ -31,20 +31,20 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          # Find the gradlew file
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          
-          if [ -z "$GRADLEW_PATH" ]; then
+          # 1. Navigate to the actual android project folder
+          if [ -d "android-app" ]; then
+            cd android-app
+          fi
+
+          # 2. Check if gradlew exists, if not, generate it
+          if [ ! -f "gradlew" ]; then
             echo "Generating Gradle Wrapper..."
             gradle wrapper
-            GRADLEW_PATH="./gradlew"
           fi
           
-          chmod +x "$GRADLEW_PATH"
-          
-          # CRITICAL FIX: Run from the root but target the :app module
-          # This avoids the "build-logic" error you saw
-          ./gradlew :app:assembleDebug --stacktrace
+          # 3. Build the app
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload De-Googled APK
         uses: actions/upload-artifact@v4
