@@ -8,17 +8,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Block Trackers in Manifest
-        run: |
-          # 1. Disable Firebase/Analytics in the Manifest so they never start
-          # We add 'tools:node="remove"' to the tracker components
-          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />' {} +
-          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />' {} +
-          
-          # 2. Kill the internet permission for the app shell (privacy hard-lock)
-          # Only the Custom Tabs (Chrome/Brave) will have web access
-          find . -name "AndroidManifest.xml" -type f -exec sed -i '/android.permission.INTERNET/d' {} +
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -27,16 +16,28 @@ jobs:
 
       - name: Build Main App
         run: |
-          # Find gradlew
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          cd $(dirname "$GRADLEW_PATH")
+          # 1. Find the root settings.gradle file to identify the project root
+          ROOT_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | grep -v "build-logic" | head -n 1 | xargs dirname)
+          echo "Project root found at: $ROOT_DIR"
+          cd "$ROOT_DIR"
+
+          # 2. Block Trackers in the Manifest (Privacy)
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />' {} +
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />' {} +
+          
+          # 3. Ensure gradlew is ready
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
+          fi
           chmod +x gradlew
           
-          # Build only the main app module
-          ./gradlew clean :app:assembleDebug --no-daemon
+          # 4. Build the actual Android module
+          # In Lynket, the module is often ':android-app' or ':app'
+          # We try to build the whole project and pick the APK later
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Lynket-Private-Build
-          path: "**/app/build/outputs/apk/debug/*.apk"
+          path: "**/*.apk"
