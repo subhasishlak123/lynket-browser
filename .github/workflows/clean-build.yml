@@ -1,0 +1,42 @@
+name: De-Googled Android Build
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Remove Trackers (The Surgical Strip)
+        run: |
+          # Remove Google Services and Firebase from Gradle files
+          find . -name "build.gradle" -type f -exec sed -i '/com.google.gms:google-services/d' {} +
+          find . -name "build.gradle" -type f -exec sed -i '/com.google.firebase/d' {} +
+          find . -name "build.gradle" -type f -exec sed -i '/play-services-ads/d' {} +
+          find . -name "build.gradle" -type f -exec sed -i '/play-services-analytics/d' {} +
+          
+          # Strip tracker metadata from the Manifest
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.android.gms.measurement/d' {} +
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.firebase/d' {} +
+          
+          # Delete any google-services.json if it exists
+          find . -name "google-services.json" -delete
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload De-Googled APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lynket-Private-Build
+          path: app/build/outputs/apk/debug/*.apk
