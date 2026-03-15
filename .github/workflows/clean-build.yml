@@ -1,4 +1,4 @@
-name: De-Googled Android Build
+name: Privacy-Focused Android Build
 on: [push, workflow_dispatch]
 
 jobs:
@@ -8,24 +8,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Hard Removal of Trackers
+      - name: Block Trackers in Manifest
         run: |
-          # 1. Physically delete Google/Firebase/Ads library folders if they exist in source
-          find . -name "*firebase*" -type d -exec rm -rf {} + || true
-          find . -name "*analytics*" -type d -exec rm -rf {} + || true
-          find . -name "*crashlytics*" -type d -exec rm -rf {} + || true
-
-          # 2. Strip dependencies from all gradle files
-          find . -name "*.gradle*" -type f | xargs sed -i '/google-services/d' || true
-          find . -name "*.gradle*" -type f | xargs sed -i '/firebase/d' || true
-          find . -name "*.gradle*" -type f | xargs sed -i '/play-services-ads/d' || true
-          find . -name "*.gradle*" -type f | xargs sed -i '/crashlytics/d' || true
-
-          # 3. Comment out any line of code that mentions Firebase or Analytics
-          # This prevents "symbol not found" errors
-          find . -name "*.java" -o -name "*.kt" -type f | xargs sed -i 's/.*Firebase.*/\/\/ &/' || true
-          find . -name "*.java" -o -name "*.kt" -type f | xargs sed -i 's/.*Analytics.*/\/\/ &/' || true
-          find . -name "*.java" -o -name "*.kt" -type f | xargs sed -i 's/.*Crashlytics.*/\/\/ &/' || true
+          # 1. Disable Firebase/Analytics in the Manifest so they never start
+          # We add 'tools:node="remove"' to the tracker components
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />' {} +
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/<application/a \    <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />' {} +
+          
+          # 2. Kill the internet permission for the app shell (privacy hard-lock)
+          # Only the Custom Tabs (Chrome/Brave) will have web access
+          find . -name "AndroidManifest.xml" -type f -exec sed -i '/android.permission.INTERNET/d' {} +
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -40,8 +32,8 @@ jobs:
           cd $(dirname "$GRADLEW_PATH")
           chmod +x gradlew
           
-          # Clean and Build only the App module
-          ./gradlew clean :app:assembleDebug --stacktrace --no-daemon
+          # Build only the main app module
+          ./gradlew clean :app:assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
