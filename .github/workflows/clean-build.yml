@@ -8,15 +8,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Remove Trackers (Surgical Strip)
+      - name: Remove Trackers
         run: |
-          # Clean all gradle files in the whole repo
+          # Clean all build files
           find . -name "*.gradle*" -type f | xargs sed -i '/com.google.gms:google-services/d' || true
           find . -name "*.gradle*" -type f | xargs sed -i '/com.google.firebase/d' || true
           find . -name "*.gradle*" -type f | xargs sed -i '/play-services-ads/d' || true
-          find . -name "*.gradle*" -type f | xargs sed -i '/play-services-analytics/d' || true
           
-          # Remove tracker metadata from Manifests
+          # Strip tracker metadata from Manifests
           find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.android.gms.measurement/d' || true
           find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.firebase/d' || true
           
@@ -29,25 +28,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Debug APK
+      - name: Build Main App
         run: |
-          # 1. Navigate to the actual android project folder
-          if [ -d "android-app" ]; then
-            cd android-app
-          fi
-
-          # 2. Check if gradlew exists, if not, generate it
-          if [ ! -f "gradlew" ]; then
-            echo "Generating Gradle Wrapper..."
-            gradle wrapper
-          fi
-          
-          # 3. Build the app
+          # 1. Locate the gradlew file (it might be in 'android-app' or root)
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          cd $(dirname "$GRADLEW_PATH")
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          
+          # 2. TARGET THE APP MODULE SPECIFICALLY
+          # This command ensures you build the actual browser, not the playground list
+          ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Upload De-Googled APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Lynket-Private-Build
-          path: "**/build/outputs/apk/debug/*.apk"
+          name: Lynket-Real-App
+          path: "**/app/build/outputs/apk/debug/*.apk"
