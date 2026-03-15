@@ -8,19 +8,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Remove Trackers
+      - name: Remove Trackers & Fix Code
         run: |
-          # Clean all build files
+          # 1. Remove Google/Firebase dependencies
           find . -name "*.gradle*" -type f | xargs sed -i '/com.google.gms:google-services/d' || true
           find . -name "*.gradle*" -type f | xargs sed -i '/com.google.firebase/d' || true
           find . -name "*.gradle*" -type f | xargs sed -i '/play-services-ads/d' || true
           
-          # Strip tracker metadata from Manifests
-          find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.android.gms.measurement/d' || true
-          find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.firebase/d' || true
-          
-          # Delete the google config file
-          find . -name "google-services.json" -delete || true
+          # 2. Fix potential 'missing package' errors caused by stripping
+          # This tells the compiler to ignore missing tracking classes instead of crashing
+          find . -name "*.java" -o -name "*.kt" -type f | xargs sed -i 's/import com.google.firebase/\/\/ import com.google.firebase/g' || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,14 +27,14 @@ jobs:
 
       - name: Build Main App
         run: |
-          # 1. Locate the gradlew file (it might be in 'android-app' or root)
+          # Find gradlew and move to that folder
           GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
           cd $(dirname "$GRADLEW_PATH")
           chmod +x gradlew
           
-          # 2. TARGET THE APP MODULE SPECIFICALLY
-          # This command ensures you build the actual browser, not the playground list
-          ./gradlew :app:assembleDebug --stacktrace
+          # RUN CLEAN FIRST, then build the app
+          # --info will show us exactly what file is causing the crash if it fails
+          ./gradlew clean :app:assembleDebug --info --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
