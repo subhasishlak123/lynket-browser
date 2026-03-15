@@ -8,19 +8,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Remove Trackers (The Surgical Strip)
+      - name: Remove Trackers (Surgical Strip)
         run: |
-          # Remove Google Services and Firebase from Gradle files
+          # Kill Google/Firebase dependencies in all gradle files
           find . -name "build.gradle" -type f -exec sed -i '/com.google.gms:google-services/d' {} +
           find . -name "build.gradle" -type f -exec sed -i '/com.google.firebase/d' {} +
           find . -name "build.gradle" -type f -exec sed -i '/play-services-ads/d' {} +
           find . -name "build.gradle" -type f -exec sed -i '/play-services-analytics/d' {} +
           
-          # Strip tracker metadata from the Manifest
+          # Strip tracker metadata from Manifests
           find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.android.gms.measurement/d' {} +
           find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.firebase/d' {} +
           
-          # Delete any google-services.json if it exists
+          # Delete the google config file if it exists
           find . -name "google-services.json" -delete
 
       - name: Set up JDK 17
@@ -28,10 +28,23 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
       - name: Build Debug APK
         run: |
+          # 1. Search for gradlew
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          
+          # 2. If gradlew is missing, generate it
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "gradlew not found, generating a new one..."
+            gradle wrapper
+            GRADLEW_PATH="./gradlew"
+          fi
+          
+          # 3. Move to the folder containing the build files
+          cd $(dirname "$GRADLEW_PATH")
+          
+          # 4. Final build
           chmod +x gradlew
           ./gradlew assembleDebug
 
@@ -39,4 +52,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Lynket-Private-Build
-          path: app/build/outputs/apk/debug/*.apk
+          path: "**/*.apk"
