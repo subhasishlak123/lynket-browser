@@ -10,18 +10,18 @@ jobs:
 
       - name: Remove Trackers (Surgical Strip)
         run: |
-          # Kill Google/Firebase dependencies in all gradle files
-          find . -name "build.gradle" -type f -exec sed -i '/com.google.gms:google-services/d' {} +
-          find . -name "build.gradle" -type f -exec sed -i '/com.google.firebase/d' {} +
-          find . -name "build.gradle" -type f -exec sed -i '/play-services-ads/d' {} +
-          find . -name "build.gradle" -type f -exec sed -i '/play-services-analytics/d' {} +
+          # Kill Google/Firebase/Ads in all build files
+          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/com.google.gms:google-services/d' || true
+          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/com.google.firebase/d' || true
+          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/play-services-ads/d' || true
+          find . -name "*.gradle" -o -name "*.gradle.kts" -type f | xargs sed -i '/play-services-analytics/d' || true
           
-          # Strip tracker metadata from Manifests
-          find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.android.gms.measurement/d' {} +
-          find . -name "AndroidManifest.xml" -type f -exec sed -i '/com.google.firebase/d' {} +
+          # Remove tracker metadata from Manifests
+          find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.android.gms.measurement/d' || true
+          find . -name "AndroidManifest.xml" -type f | xargs sed -i '/com.google.firebase/d' || true
           
-          # Delete the google config file if it exists
-          find . -name "google-services.json" -delete
+          # Delete the google config file
+          find . -name "google-services.json" -delete || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -31,25 +31,23 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          # 1. Search for gradlew
+          # Find the gradlew file
           GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
           
-          # 2. If gradlew is missing, generate it
           if [ -z "$GRADLEW_PATH" ]; then
-            echo "gradlew not found, generating a new one..."
+            echo "Generating Gradle Wrapper..."
             gradle wrapper
             GRADLEW_PATH="./gradlew"
           fi
           
-          # 3. Move to the folder containing the build files
-          cd $(dirname "$GRADLEW_PATH")
+          chmod +x "$GRADLEW_PATH"
           
-          # 4. Final build
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          # CRITICAL FIX: Run from the root but target the :app module
+          # This avoids the "build-logic" error you saw
+          ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload De-Googled APK
         uses: actions/upload-artifact@v4
         with:
           name: Lynket-Private-Build
-          path: "**/*.apk"
+          path: "**/build/outputs/apk/debug/*.apk"
